@@ -459,7 +459,7 @@
     const r = el("text", { class: "rest", x: x + W / 2, y: y + 82 });
     restText[no] = r;
     g.append(t, r);
-    g.addEventListener("click", () => select(no));
+    g.addEventListener("click", () => toggle(no));
     tablesLayer.append(g);
   }
 
@@ -468,11 +468,19 @@
     const b = document.createElement("button");
     b.textContent = CIRCLED[no];
     b.dataset.no = no;
-    b.addEventListener("click", () => select(no));
+    b.addEventListener("click", () => toggle(no));
     buttonsEl.append(b);
   }
 
+  // 同じ番号をもう一度押したら選択解除
+  let selected = null;
+  function toggle(no) {
+    if (rolling) return;
+    select(selected === no ? null : no);
+  }
+
   function select(no, opts = {}) {
+    selected = no;
     svg.classList.toggle("has-sel", no !== null);
     tablesLayer.querySelectorAll(".table").forEach(g => g.classList.toggle("sel", +g.dataset.no === no));
     buttonsEl.querySelectorAll("button[data-no]").forEach(b => b.classList.toggle("on", +b.dataset.no === no));
@@ -535,6 +543,7 @@
   function roll(finalNo) {
     rolling = true;
     drawBtn.disabled = true;
+    selected = null;
     svg.classList.remove("has-sel");
     tablesLayer.querySelectorAll(".table").forEach(g => g.classList.remove("sel"));
     buttonsEl.querySelectorAll("button").forEach(b => b.classList.remove("on"));
