@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4f1ea">
+<meta name="robots" content="noindex, nofollow">
+<title>宴会 座席くじ</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --panel: #ffffff;
+    --ink: #1f2a44;
+    --muted: #7a8194;
+    --line: #1f2a44;
+    --floor: #fbfaf6;
+    --accent: #d62828;
+    --accent-soft: #fde4e4;
+    --gold: #b0842a;
+    --done: #e4e2dc;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+  button { font: inherit; color: inherit; }
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+  .views { flex: 1; min-height: 0; position: relative; }
+  .view {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+             10px max(12px, env(safe-area-inset-left));
+  }
+  .view.active { display: flex; }
+  .view.scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+  /* ===== 下部タブ ===== */
+  .tabbar {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: var(--panel);
+    border-top: 1px solid #ddd8cc;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar button {
+    border: 0;
+    background: none;
+    padding: 8px 0 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .tabbar button.on { color: var(--accent); font-weight: 700; }
+
+  /* ===== マップ ===== */
+  .guide {
+    flex-shrink: 0;
+    height: 56px;
+    line-height: 1;
+    background: var(--panel);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .guide.idle { color: var(--muted); font-size: 16px; font-weight: 500; }
+  .guide.rolling { color: var(--muted); }
+  .guide.drawn { background: var(--accent-soft); }
+  .guide .no { color: var(--accent); font-size: 1.4em; margin-right: .1em; }
+  .guide small { font-size: 14px; font-weight: 500; color: var(--muted); margin-right: .5em; }
+  .guide.pop { animation: pop .35s ease-out; }
+  @keyframes pop { from { transform: scale(.9); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+
+  .map-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+    background: var(--panel);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    padding: 8px;
+  }
+  .map-wrap svg { height: 100%; width: auto; max-width: 100%; }
+
+  .wall { fill: none; stroke: var(--line); stroke-width: 5; stroke-linecap: square; }
+  .room-box { fill: #fff; stroke: var(--line); stroke-width: 5; }
+  .floor { fill: var(--floor); }
+  .label { fill: var(--ink); font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+
+  .table { cursor: pointer; transition: opacity .25s; }
+  .table rect.cell { fill: #fff; stroke: var(--line); stroke-width: 4; transition: fill .25s; }
+  .table text { fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .table text.num { font-size: 34px; }
+  .table text.rest { font-size: 17px; font-weight: 700; }
+  .table .ring { fill: none; stroke: var(--accent); stroke-width: 6; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .table.empty rect.cell { fill: var(--done); }
+  .table.empty text { fill: var(--muted); }
+
+  svg.has-sel .table:not(.sel) { opacity: .35; }
+  .table.sel rect.cell { fill: var(--accent); stroke: var(--accent); }
+  .table.sel text { fill: #fff; font-weight: 700; }
+  .table.sel .ring { animation: ring 1.4s ease-out infinite; }
+  @keyframes ring {
+    0%   { opacity: .9; transform: scale(1); }
+    100% { opacity: 0;  transform: scale(1.6, 1.35); }
+  }
+
+  .buttons {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+  .buttons button {
+    font-size: 20px;
+    height: 38px;
+    padding: 0;
+    border: 2px solid var(--ink);
+    background: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .buttons button:active { background: #eef0f5; }
+  .buttons button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .draw {
+    flex-shrink: 0;
+    height: 58px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #a51d1d;
+  }
+  .draw small { font-size: 14px; font-weight: 500; opacity: .85; margin-left: .4em; }
+  .draw:active { transform: translateY(2px); box-shadow: 0 1px 0 #a51d1d; }
+  .draw:disabled { background: #b9b6ae; box-shadow: none; transform: none; }
+
+  /* ===== 共通カード ===== */
+  .card {
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    flex-shrink: 0;
+  }
+  .card h2 { margin: 0 0 10px; font-size: 15px; color: var(--gold); letter-spacing: .1em; }
+  .card p.note { margin: 8px 0 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .btn {
+    border: 2px solid var(--ink);
+    background: #fff;
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .btn:active { background: #eef0f5; }
+  .btn:disabled { opacity: .35; }
+  .btn.danger { border-color: var(--accent); color: var(--accent); }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ===== 抽選状況 ===== */
+  .summary { display: flex; align-items: baseline; gap: 6px; font-size: 15px; }
+  .summary b { font-size: 40px; font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1; }
+  .summary .sub { margin-left: auto; color: var(--muted); font-size: 13px; }
+
+  .stock { list-style: none; margin: 0; padding: 0; }
+  .stock li {
+    display: grid;
+    grid-template-columns: 2em 1fr 6.4em;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid #eee9de;
+  }
+  .stock li:last-child { border-bottom: 0; }
+  .stock .n { font-size: 24px; text-align: center; }
+  .slips { display: flex; gap: 4px; }
+  .slips i { flex: 0 0 auto; width: 18px; height: 24px; border-radius: 3px; background: var(--accent); }
+  .slips i.used { background: none; border: 2px dashed #cfcabe; }
+  .stock .cnt { text-align: right; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .stock .cnt b { font-size: 20px; }
+  .stock li.empty .n, .stock li.empty .cnt { color: var(--muted); }
+  .stock li.last .cnt b { color: var(--accent); }
+
+  .history { list-style: none; margin: 0; padding: 0; max-height: none; }
+  .history li {
+    display: grid;
+    grid-template-columns: 3em 1fr auto;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #eee9de;
+    font-variant-numeric: tabular-nums;
+  }
+  .history li:last-child { border-bottom: 0; }
+  .history .i { color: var(--muted); font-size: 13px; }
+  .history .h { font-size: 22px; }
+  .history .t { color: var(--muted); font-size: 13px; }
+  .empty-msg { color: var(--muted); font-size: 14px; margin: 0; }
+
+  /* ===== 設定 ===== */
+  .lock {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 700;
+    padding: 10px 12px; border-radius: 10px;
+    background: #eaf3ea; color: #2f6b34;
+  }
+  .lock.locked { background: var(--accent-soft); color: var(--accent); }
+  .set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+  .stepper { display: grid; grid-template-columns: 1.6em 36px 1fr 36px; align-items: center; gap: 4px; }
+  .stepper .n { font-size: 22px; }
+  .stepper button {
+    height: 36px; border: 2px solid var(--ink); background: #fff; border-radius: 8px;
+    font-size: 20px; line-height: 1; padding: 0; cursor: pointer;
+  }
+  .stepper button:disabled { opacity: .25; }
+  .stepper output { text-align: center; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .total { margin-top: 10px; text-align: right; font-size: 15px; }
+  .total b { font-size: 22px; }
+  textarea {
+    width: 100%; height: 90px; margin-top: 8px;
+    font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    border: 1px solid #cfcabe; border-radius: 8px; padding: 8px;
+  }
+  .warn {
+    display: none;
+    background: #fff4d6; color: #7a5600; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.6;
+  }
+  .warn.show { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="views">
+
+    <!-- ============ マップ・くじ引き ============ -->
+    <section class="view active" id="view-map">
+      <div class="guide idle" id="guide">くじを引くか、番号を選んでください</div>
+
+      <div class="map-wrap">
+        <svg id="map" viewBox="40 30 650 1240" role="img" aria-label="会場マップ">
+          <rect class="room-box" x="57" y="50" width="165" height="102"/>
+          <text class="label" x="140" y="101" font-size="34">WC(女)</text>
+          <rect class="room-box" x="57" y="188" width="165" height="103"/>
+          <text class="label" x="140" y="240" font-size="34">WC(男)</text>
+          <rect class="room-box" x="57" y="291" width="165" height="513"/>
+          <line class="wall" x1="57" y1="804" x2="222" y2="291" stroke-width="4"/>
+          <rect class="room-box" x="57" y="805" width="111" height="137"/>
+          <text class="label" x="112" y="873" font-size="36">EV</text>
+
+          <polyline class="wall" points="57,942 57,1148 168,1148 168,1216 222,1216 222,1250 278,1250"/>
+          <text class="label" x="168" y="1045" font-size="36">下駄箱</text>
+
+          <rect class="floor" x="333" y="325" width="332" height="925"/>
+          <rect class="room-box" x="333" y="50" width="332" height="241"/>
+          <line class="wall" x1="333" y1="291" x2="665" y2="50" stroke-width="4"/>
+          <rect class="room-box" x="333" y="291" width="332" height="34"/>
+          <text class="label" x="499" y="308" font-size="24">スクリーン</text>
+          <polyline class="wall" points="665,325 665,1250 333,1250"/>
+          <line class="wall" x1="333" y1="325" x2="333" y2="495"/>
+          <line class="wall" x1="333" y1="530" x2="333" y2="735"/>
+          <line class="wall" x1="333" y1="770" x2="333" y2="875"/>
+          <line class="wall" x1="333" y1="940" x2="333" y2="975"/>
+          <line class="wall" x1="333" y1="1010" x2="333" y2="1250"/>
+
+          <g id="tables"></g>
+        </svg>
+      </div>
+
+      <div class="buttons" id="buttons"></div>
+      <button class="draw" id="drawBtn">くじを引く</button>
+    </section>
+
+    <!-- ============ 抽選状況 ============ -->
+    <section class="view scroll" id="view-status">
+      <div class="card">
+        <div class="summary">
+          残り<b id="sumRest">0</b>枚
+          <span class="sub" id="sumSub"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>くじ紙の残り</h2>
+        <ul class="stock" id="stock"></ul>
+      </div>
+      <div class="card">
+        <h2>抽選履歴（新しい順）</h2>
+        <ul class="history" id="history"></ul>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn danger" id="undoBtn">直前の1回を取り消す</button>
+        </div>
+        <p class="note">間違えて引いたときだけ使ってください。取り消したくじは残りに戻ります。</p>
+      </div>
+    </section>
+
+    <!-- ============ 詳細設定 ============ -->
+    <section class="view scroll" id="view-settings">
+      <div class="warn" id="storageWarn">
+        この画面では抽選状況を保存できません（プライベートブラウズ等）。閉じると状況が消えます。通常モードで開き直してください。
+      </div>
+      <div class="card">
+        <h2>くじ紙の枚数</h2>
+        <div class="lock" id="lockBadge"></div>
+        <div style="height:10px"></div>
+        <div class="btn-row" id="bulkRow">
+          <button class="btn" data-bulk="4">すべて4枚</button>
+          <button class="btn" data-bulk="5">すべて5枚</button>
+        </div>
+        <div style="height:10px"></div>
+        <div class="set-grid" id="setGrid"></div>
+        <div class="total">合計 <b id="setTotal">0</b> 枚</div>
+      </div>
+
+      <div class="card">
+        <h2>バックアップ</h2>
+        <div class="btn-row">
+          <button class="btn" id="exportBtn">現在の状況を書き出す</button>
+          <button class="btn" id="importBtn">貼り付けて復元</button>
+        </div>
+        <textarea id="backupText" placeholder="ここに書き出したデータが表示されます。復元するときはここに貼り付けてください。"></textarea>
+        <p class="note">抽選状況はこの端末のブラウザに自動保存されています。念のため、書き出したデータをメモアプリ等にコピーしておくと安心です。</p>
+      </div>
+
+      <div class="card">
+        <h2>リセット</h2>
+        <button class="btn danger" id="resetBtn">すべてリセット（最初から）</button>
+        <p class="note">抽選履歴と枚数設定をすべて消して初期状態に戻します。元に戻せません。</p>
+      </div>
+    </section>
+  </div>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-view="view-status">
+      <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      抽選状況
+    </button>
+    <button data-view="view-map" class="on">
+      <svg viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>
+      マップ・くじ
+    </button>
+    <button data-view="view-settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      詳細設定
+    </button>
+  </nav>
+</div>
+
+<script>
+  const CIRCLED = ["", "①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭"];
+  const NOS = Array.from({ length: 14 }, (_, i) => i + 1);
+  const W = 56, H = 104;
+  const LEFT_X = 388, RIGHT_X = 555;
+  // テーブル番号 → [x, y]（元図の座標）
+  const TABLES = {
+    1: [RIGHT_X, 1114], 2: [RIGHT_X, 1010], 3: [RIGHT_X, 874], 4: [RIGHT_X, 770],
+    5: [RIGHT_X, 634],  6: [RIGHT_X, 530],  7: [RIGHT_X, 393],
+    8: [LEFT_X, 1114],  9: [LEFT_X, 1010],  10: [LEFT_X, 874], 11: [LEFT_X, 770],
+    12: [LEFT_X, 634],  13: [LEFT_X, 530],  14: [LEFT_X, 393],
+  };
+  const MIN_SLIPS = 0, MAX_SLIPS = 9, DEFAULT_SLIPS = 5;
+
+  // ===== 保存（localStorage） =====
+  const KEY = "seat-lottery-v1";
+  let storageOK = true;
+
+  function defaultState() {
+    const counts = {};
+    NOS.forEach(n => counts[n] = DEFAULT_SLIPS);
+    return { v: 1, counts, history: [] };
+  }
+  function isValidState(s) {
+    return s && typeof s === "object" && s.counts && Array.isArray(s.history)
+      && NOS.every(n => Number.isInteger(s.counts[n]) && s.counts[n] >= MIN_SLIPS && s.counts[n] <= MAX_SLIPS)
+      && s.history.every(h => h && NOS.includes(h.no) && typeof h.at === "number")
+      && NOS.every(n => s.history.filter(h => h.no === n).length <= s.counts[n]);
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (isValidState(s)) return s;
+      }
+    } catch (e) { /* 読めなければ初期状態 */ }
+    return defaultState();
+  }
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+      return true;
+    } catch (e) {
+      storageOK = false;
+      return false;
+    }
+  }
+  try {
+    localStorage.setItem(KEY + "-probe", "1");
+    localStorage.removeItem(KEY + "-probe");
+  } catch (e) { storageOK = false; }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+  let state = load();
+
+  const drawnOf = n => state.history.filter(h => h.no === n).length;
+  const restOf = n => state.counts[n] - drawnOf(n);
+  const totalSlips = () => NOS.reduce((a, n) => a + state.counts[n], 0);
+  const totalRest = () => NOS.reduce((a, n) => a + restOf(n), 0);
+  const locked = () => state.history.length > 0;
+
+  // ===== DOM =====
+  const NS = "http://www.w3.org/2000/svg";
+  const $ = id => document.getElementById(id);
+  const svg = $("map"), tablesLayer = $("tables"), guide = $("guide"), buttonsEl = $("buttons"), drawBtn = $("drawBtn");
+  const el = (tag, attrs) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  };
+
+  // テーブル描画
+  const restText = {};
+  for (const no of NOS) {
+    const [x, y] = TABLES[no];
+    const g = el("g", { class: "table", "data-no": no });
+    g.append(
+      el("rect", { class: "ring", x, y, width: W, height: H, rx: 6 }),
+      el("rect", { class: "cell", x, y, width: W, height: H })
+    );
+    const t = el("text", { class: "num", x: x + W / 2, y: y + 40 });
+    t.textContent = CIRCLED[no];
+    const r = el("text", { class: "rest", x: x + W / 2, y: y + 82 });
+    restText[no] = r;
+    g.append(t, r);
+    g.addEventListener("click", () => select(no));
+    tablesLayer.append(g);
+  }
+
+  // 番号ボタン（案内用）
+  for (const no of NOS) {
+    const b = document.createElement("button");
+    b.textContent = CIRCLED[no];
+    b.dataset.no = no;
+    b.addEventListener("click", () => select(no));
+    buttonsEl.append(b);
+  }
+
+  function select(no, opts = {}) {
+    svg.classList.toggle("has-sel", no !== null);
+    tablesLayer.querySelectorAll(".table").forEach(g => g.classList.toggle("sel", +g.dataset.no === no));
+    buttonsEl.querySelectorAll("button[data-no]").forEach(b => b.classList.toggle("on", +b.dataset.no === no));
+
+    if (no === null) {
+      guide.className = "guide idle";
+      guide.textContent = "くじを引くか、番号を選んでください";
+      return;
+    }
+    guide.className = "guide" + (opts.drawn ? " drawn" : "");
+    guide.innerHTML = (opts.label ? `<small>${opts.label}</small>` : "")
+      + `<span class="no">${CIRCLED[no]}</span>番テーブルです`;
+    void guide.offsetWidth;
+    guide.classList.add("pop");
+  }
+
+  // ===== くじ引き =====
+  let rolling = false;
+
+  function randomInt(n) {
+    if (window.crypto && crypto.getRandomValues) {
+      const limit = Math.floor(0x100000000 / n) * n;
+      const buf = new Uint32Array(1);
+      do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+      return buf[0] % n;
+    }
+    return Math.floor(Math.random() * n);
+  }
+
+  // 残っているくじ紙1枚1枚から等確率で選ぶ（実物の箱から引くのと同じ）
+  function pickSlip() {
+    let r = randomInt(totalRest());
+    for (const n of NOS) {
+      const rest = restOf(n);
+      if (r < rest) return n;
+      r -= rest;
+    }
+    return null;
+  }
+
+  drawBtn.addEventListener("click", () => {
+    if (rolling || totalRest() <= 0) return;
+
+    if (!locked()) {
+      const detail = NOS.map(n => `${CIRCLED[n]}${state.counts[n]}`).join(" ");
+      if (!confirm(`合計${totalSlips()}枚で抽選を開始します。\n${detail}\n\n開始後は枚数を変更できません。よろしいですか？`)) return;
+    }
+
+    const no = pickSlip();
+    // 結果を見せる前に保存（途中で閉じても消えない・二重に出ない）
+    state.history.push({ no, at: Date.now() });
+    if (!save() && !confirm("抽選結果を保存できませんでした。このまま続けると、画面を閉じたときに状況が消えます。続けますか？")) {
+      state.history.pop();
+      return;
+    }
+    renderAll();
+    roll(no);
+  });
+
+  function roll(finalNo) {
+    rolling = true;
+    drawBtn.disabled = true;
+    svg.classList.remove("has-sel");
+    tablesLayer.querySelectorAll(".table").forEach(g => g.classList.remove("sel"));
+    buttonsEl.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+
+    let delay = 50, elapsed = 0, i = randomInt(14);
+    const step = () => {
+      i = i % 14 + 1;
+      guide.className = "guide rolling";
+      guide.innerHTML = `<span class="no">${CIRCLED[i]}</span>`;
+      elapsed += delay;
+      if (elapsed < 1600) {
+        delay = Math.min(delay * 1.12, 220);
+        setTimeout(step, delay);
+      } else {
+        rolling = false;
+        select(finalNo, { drawn: true, label: `${state.history.length}枚目` });
+        renderDrawButton();
+      }
+    };
+    step();
+  }
+
+  // ===== 画面更新 =====
+  function renderMap() {
+    for (const no of NOS) {
+      const rest = restOf(no);
+      restText[no].textContent = `${rest}/${state.counts[no]}`;
+      tablesLayer.querySelector(`.table[data-no="${no}"]`).classList.toggle("empty", rest === 0);
+    }
+  }
+
+  function renderDrawButton() {
+    const rest = totalRest();
+    drawBtn.disabled = rolling || rest <= 0;
+    drawBtn.innerHTML = rest > 0
+      ? `くじを引く<small>残り${rest}枚</small>`
+      : (totalSlips() > 0 ? "抽選終了（くじがありません）" : "詳細設定で枚数を設定してください");
+  }
+
+  function renderStatus() {
+    $("sumRest").textContent = totalRest();
+    $("sumSub").textContent = `抽選済 ${state.history.length} ／ 全 ${totalSlips()} 枚`;
+
+    const stock = $("stock");
+    stock.innerHTML = "";
+    for (const no of NOS) {
+      const rest = restOf(no), all = state.counts[no];
+      const li = document.createElement("li");
+      if (rest === 0) li.className = "empty";
+      else if (rest === 1) li.className = "last";
+      const slips = Array.from({ length: all }, (_, k) => `<i class="${k < rest ? "" : "used"}"></i>`).join("");
+      li.innerHTML = `<span class="n">${CIRCLED[no]}</span>
+        <span class="slips">${slips}</span>
+        <span class="cnt">${rest === 0 ? "なし" : `残り <b>${rest}</b>/${all}枚`}</span>`;
+      stock.append(li);
+    }
+
+    const hist = $("history");
+    hist.innerHTML = "";
+    if (state.history.length === 0) {
+      hist.innerHTML = `<li><p class="empty-msg">まだ抽選していません</p></li>`;
+    } else {
+      state.history.map((h, i) => ({ ...h, i: i + 1 })).reverse().forEach(h => {
+        const d = new Date(h.at);
+        const t = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        const li = document.createElement("li");
+        li.innerHTML = `<span class="i">${h.i}枚目</span><span class="h">${CIRCLED[h.no]}</span><span class="t">${t}</span>`;
+        hist.append(li);
+      });
+    }
+    $("undoBtn").disabled = state.history.length === 0;
+  }
+
+  function renderSettings() {
+    $("storageWarn").classList.toggle("show", !storageOK);
+    const isLocked = locked();
+    const badge = $("lockBadge");
+    badge.className = "lock" + (isLocked ? " locked" : "");
+    badge.textContent = isLocked
+      ? "🔒 抽選開始済みのため変更できません（変更するには全リセット）"
+      : "✏️ 抽選開始前なので変更できます（最初の1枚を引くと確定）";
+
+    $("bulkRow").querySelectorAll("button").forEach(b => b.disabled = isLocked);
+
+    const grid = $("setGrid");
+    grid.innerHTML = "";
+    for (const no of NOS) {
+      const c = state.counts[no];
+      const row = document.createElement("div");
+      row.className = "stepper";
+      row.innerHTML = `<span class="n">${CIRCLED[no]}</span>
+        <button data-d="-1" ${isLocked || c <= MIN_SLIPS ? "disabled" : ""}>−</button>
+        <output>${c}</output>
+        <button data-d="1" ${isLocked || c >= MAX_SLIPS ? "disabled" : ""}>＋</button>`;
+      row.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+        if (locked()) return;
+        state.counts[no] = Math.max(MIN_SLIPS, Math.min(MAX_SLIPS, state.counts[no] + +b.dataset.d));
+        save();
+        renderAll();
+      }));
+      grid.append(row);
+    }
+    $("setTotal").textContent = totalSlips();
+  }
+
+  function renderAll() {
+    renderMap();
+    renderDrawButton();
+    renderStatus();
+    renderSettings();
+  }
+
+  // ===== 操作 =====
+  $("bulkRow").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    if (locked()) return;
+    NOS.forEach(n => state.counts[n] = +b.dataset.bulk);
+    save();
+    renderAll();
+  }));
+
+  $("undoBtn").addEventListener("click", () => {
+    const last = state.history[state.history.length - 1];
+    if (!last) return;
+    if (!confirm(`直前の抽選（${state.history.length}枚目：${CIRCLED[last.no]}）を取り消して、くじを残りに戻します。よろしいですか？`)) return;
+    state.history.pop();
+    save();
+    select(null);
+    renderAll();
+  });
+
+  $("resetBtn").addEventListener("click", () => {
+    if (!confirm("抽選履歴と枚数設定をすべて消します。よろしいですか？")) return;
+    if (!confirm("本当にリセットしますか？元に戻せません。")) return;
+    state = defaultState();
+    save();
+    select(null);
+    renderAll();
+  });
+
+  $("exportBtn").addEventListener("click", async () => {
+    const text = JSON.stringify(state);
+    const ta = $("backupText");
+    ta.value = text;
+    ta.select();
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("コピーしました。メモアプリ等に貼り付けて保管してください。");
+    } catch (e) {
+      alert("下の欄に書き出しました。全選択してコピーしてください。");
+    }
+  });
+
+  $("importBtn").addEventListener("click", () => {
+    let s;
+    try { s = JSON.parse($("backupText").value.trim()); } catch (e) { s = null; }
+    if (!isValidState(s)) { alert("データの形式が正しくありません。書き出したデータをそのまま貼り付けてください。"); return; }
+    if (!confirm(`抽選済 ${s.history.length} 枚の状況に置き換えます。現在の状況は上書きされます。よろしいですか？`)) return;
+    state = s;
+    save();
+    select(null);
+    renderAll();
+    alert("復元しました。");
+  });
+
+  // タブ切り替え
+  const tabbar = $("tabbar");
+  tabbar.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    tabbar.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === b.dataset.view));
+  }));
+
+  // 別タブで操作された場合も同期
+  window.addEventListener("storage", e => {
+    if (e.key === KEY) { state = load(); renderAll(); }
+  });
+
+  renderAll();
+  const last = state.history[state.history.length - 1];
+  if (last) select(last.no, { drawn: true, label: `前回 ${state.history.length}枚目` });
+</script>
+</body>
+</html>
