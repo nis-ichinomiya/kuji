@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>特別景品 座席抽選</title>
+<title>サプライズ景品 座席抽選</title>
 <style>
 /* ライトモード（既定） */
 :root{
@@ -294,7 +294,7 @@ const state = {
   excluded: new Set(),
   winners: [],              // {id, table, prize, name, ts}
   opts: {excludeWon:true, sound:true, duration:7, orient:'v', theme:'light', layout2:true,
-         title:'特別景品 抽選会', prizeCount:4, prizeNames:[]}
+         title:'サプライズ景品 抽選会', prizeCount:4, prizeNames:[]}
 };
 try{
   const s = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -304,6 +304,8 @@ try{
     Object.assign(state.opts, s.opts || {});
     // 左右レイアウト版への移行時は一度だけ縦向きに切り替える
     if(!(s.opts && s.opts.layout2)){ state.opts.orient='v'; state.opts.layout2=true; }
+    // 旧タイトルのまま保存されている場合は新タイトルへ
+    if(state.opts.title==='特別景品 抽選会') state.opts.title='サプライズ景品 抽選会';
   }
 }catch(e){}
 function save(){
@@ -415,7 +417,7 @@ function updateHeader(){
     m.textContent = '抽選終了';
     s.innerHTML = `全 ${state.opts.prizeCount} 回の抽選が終わりました`;
   }else{
-    m.textContent = state.opts.title || '特別景品 抽選会';
+    m.textContent = state.opts.title || 'サプライズ景品 抽選会';
     s.innerHTML = `<span class="round">${roundLabel(i)}</span>`
       + (prizeName(i)?`<br><span class="pz">${esc(prizeName(i))}</span>`:'')
       + `<br>抽選対象 <b>${eligible().length}</b> 席`;
