@@ -160,13 +160,59 @@ body.summary #summary{display:flex}
 #toast{position:fixed;left:50%;top:22vh;transform:translateX(-50%);background:var(--win2);color:#fff;font-size:3vh;font-weight:700;padding:1.6vh 3vw;border-radius:1.2vh;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20}
 #toast.show{opacity:1}
 #confetti{position:fixed;inset:0;pointer-events:none;z-index:16}
+
+/* ---------- 飾りつけ（左サイド） ---------- */
+#side{position:relative;overflow:hidden}
+#side>header,#side>.controls{position:relative;z-index:1}
+.deco{position:absolute;inset:0;pointer-events:none;z-index:0}
+/* 旗のガーランド */
+.garland{position:absolute;left:-2%;top:0;width:104%;height:auto;overflow:visible}
+.garland .rope{fill:none;stroke:var(--muted);stroke-width:2.5;opacity:.55}
+.garland .flag{transform-box:fill-box;transform-origin:top center;animation:sway 2.8s ease-in-out infinite alternate}
+.garland .f0{fill:var(--win2)}.garland .f1{fill:var(--accent)}.garland .f2{fill:var(--won)}.garland .f3{fill:var(--table-stroke)}.garland .f4{fill:#1fb89a}
+@keyframes sway{from{transform:rotate(-5deg)}to{transform:rotate(5deg)}}
+/* きらきら */
+.spark{position:absolute;line-height:1;color:var(--accent);opacity:0;animation:twinkle 2.6s ease-in-out infinite}
+.spark.c2{color:var(--win2)}.spark.c3{color:var(--won)}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:.85;transform:scale(1) rotate(90deg)}}
+/* タイトル背後のスポットライト */
+header{position:relative}
+header::before{content:"";position:absolute;inset:-12vh -2vw;z-index:-1;background:radial-gradient(closest-side,var(--win-glow),transparent);opacity:.7}
+/* プレゼント箱 */
+.gift{width:min(14vh,8.5vw);height:auto;margin-bottom:2vh;overflow:visible;animation:bob 1.6s ease-in-out infinite alternate;filter:drop-shadow(0 1vh 1.2vh rgba(0,0,0,.18))}
+.gift .box{fill:var(--win2)}.gift .lid{fill:var(--win2);filter:brightness(1.12)}.gift .rib{fill:var(--accent)}
+@keyframes bob{from{transform:translateY(0) rotate(-4deg)}to{transform:translateY(-1.4vh) rotate(4deg)}}
+body.drawing .gift{animation:shake .14s linear infinite}
+@keyframes shake{0%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}100%{transform:rotate(-7deg)}}
+body.result .gift{display:none}
+/* 待機中タイトルの両脇に星（幅を取らないよう絶対配置） */
+#h-main{position:relative}
+body:not(.drawing):not(.result) #h-main::before,
+body:not(.drawing):not(.result) #h-main::after{content:"✦";position:absolute;top:50%;transform:translateY(-50%);color:var(--accent);font-size:.55em}
+body:not(.drawing):not(.result) #h-main::before{right:100%;margin-right:.5em}
+body:not(.drawing):not(.result) #h-main::after{left:100%;margin-left:.5em}
+@media (prefers-reduced-motion:reduce){
+  .garland .flag,.spark,.gift{animation:none!important}
+  .spark{opacity:.5}
+}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="stage">
     <div id="side">
+      <div class="deco" aria-hidden="true">
+        <svg class="garland" viewBox="0 0 1000 150"><path class="rope" d="M0 8 Q500 120 1000 8"/></svg>
+      </div>
       <header>
+        <svg class="gift" viewBox="0 0 100 100" aria-hidden="true">
+          <rect class="box" x="14" y="44" width="72" height="50" rx="4"/>
+          <rect class="lid" x="8" y="30" width="84" height="18" rx="4"/>
+          <rect class="rib" x="44" y="30" width="12" height="64"/>
+          <ellipse class="rib" cx="37" cy="22" rx="14" ry="8" transform="rotate(-25 37 22)"/>
+          <ellipse class="rib" cx="63" cy="22" rx="14" ry="8" transform="rotate(25 63 22)"/>
+          <circle class="rib" cx="50" cy="27" r="6"/>
+        </svg>
         <div id="h-main"></div>
         <div id="h-sub"></div>
       </header>
@@ -721,6 +767,41 @@ document.addEventListener('click', e=>{ const b=e.target.closest('button'); if(b
 
 applyTheme();
 render();
+</script>
+<script>
+/* ===== 飾りつけ（ガーランドの旗・きらきら） ===== */
+(()=>{
+  const NS = 'http://www.w3.org/2000/svg';
+  const garland = document.querySelector('.garland');
+  const N = 13;
+  for(let i=0;i<N;i++){
+    // ロープ（M0 8 Q500 120 1000 8）上の位置と傾き
+    const t = (i+.5)/N;
+    const x = 1000*t, y = (1-t)*(1-t)*8 + 2*(1-t)*t*120 + t*t*8;
+    const deg = Math.atan2(224*(1-2*t), 1000) * 180/Math.PI;
+    const g = document.createElementNS(NS,'g');
+    g.setAttribute('transform',`translate(${x} ${y}) rotate(${deg})`);
+    const f = document.createElementNS(NS,'polygon');
+    f.setAttribute('points','-24,0 24,0 0,50');
+    f.setAttribute('class',`flag f${i%5}`);
+    f.style.animationDelay = `${-(i*0.37)%2.8}s`;
+    g.appendChild(f);
+    garland.appendChild(g);
+  }
+  const deco = document.querySelector('.deco');
+  const SPARKS = 16;
+  for(let i=0;i<SPARKS;i++){
+    const s = document.createElement('span');
+    s.className = 'spark' + (i%3===1 ? ' c2' : i%3===2 ? ' c3' : '');
+    s.textContent = '✦';
+    s.style.left = `${4 + Math.random()*92}%`;
+    s.style.top = `${14 + Math.random()*50}%`;
+    s.style.fontSize = `${1.6 + Math.random()*2.2}vh`;
+    s.style.animationDelay = `${-Math.random()*2.6}s`;
+    s.style.animationDuration = `${2.2 + Math.random()*1.6}s`;
+    deco.appendChild(s);
+  }
+})();
 </script>
 </body>
 </html>
