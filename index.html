@@ -112,6 +112,7 @@
   .floor { fill: var(--floor); }
   .label { fill: var(--ink); font-weight: 700; text-anchor: middle; dominant-baseline: central; }
 
+  .spare { fill: #fff; stroke: #b9b6ae; stroke-width: 4; }
   .table { cursor: pointer; transition: opacity .25s; }
   .table rect.cell { fill: #fff; stroke: var(--line); stroke-width: 4; transition: fill .25s; }
   .table text { fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
@@ -133,7 +134,7 @@
   .buttons {
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(8, 1fr);
     gap: 6px;
   }
   .buttons button {
@@ -279,17 +280,18 @@
           <polyline class="wall" points="57,942 57,1148 168,1148 168,1216 222,1216 222,1250 278,1250"/>
           <text class="label" x="168" y="1045" font-size="36">下駄箱</text>
 
-          <rect class="floor" x="333" y="325" width="332" height="925"/>
-          <rect class="room-box" x="333" y="50" width="332" height="241"/>
-          <line class="wall" x1="333" y1="291" x2="665" y2="50" stroke-width="4"/>
-          <rect class="room-box" x="333" y="291" width="332" height="34"/>
-          <text class="label" x="499" y="308" font-size="24">スクリーン</text>
-          <polyline class="wall" points="665,325 665,1250 333,1250"/>
-          <line class="wall" x1="333" y1="325" x2="333" y2="495"/>
-          <line class="wall" x1="333" y1="530" x2="333" y2="735"/>
-          <line class="wall" x1="333" y1="770" x2="333" y2="875"/>
-          <line class="wall" x1="333" y1="940" x2="333" y2="975"/>
-          <line class="wall" x1="333" y1="1010" x2="333" y2="1250"/>
+          <rect class="floor" x="333" y="564" width="332" height="686"/>
+          <rect class="room-box" x="333" y="50" width="332" height="240"/>
+          <line class="wall" x1="333" y1="290" x2="665" y2="50" stroke-width="4"/>
+          <rect class="room-box" x="333" y="290" width="332" height="240"/>
+          <line class="wall" x1="333" y1="530" x2="665" y2="290" stroke-width="4"/>
+          <rect class="room-box" x="333" y="530" width="332" height="34"/>
+          <text class="label" x="499" y="547" font-size="24">スクリーン</text>
+          <polyline class="wall" points="333,564 333,1250 665,1250 665,564"/>
+
+          <!-- 番号なし（席なし）のテーブル -->
+          <rect class="spare" x="388" y="1114" width="56" height="104"/>
+          <rect class="spare" x="555" y="1114" width="56" height="104"/>
 
           <g id="tables"></g>
         </svg>
@@ -331,6 +333,7 @@
         <div class="lock" id="lockBadge"></div>
         <div style="height:10px"></div>
         <div class="btn-row" id="bulkRow">
+          <button class="btn" data-bulk="seats">席数どおり</button>
           <button class="btn" data-bulk="4">すべて4枚</button>
           <button class="btn" data-bulk="5">すべて5枚</button>
         </div>
@@ -374,27 +377,28 @@
 </div>
 
 <script>
-  const CIRCLED = ["", "①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭"];
-  const NOS = Array.from({ length: 14 }, (_, i) => i + 1);
+  const CIRCLED = ["", "①","②","③","④","⑤","⑥","⑦","⑧"];
+  const NOS = Array.from({ length: 8 }, (_, i) => i + 1);
   const W = 56, H = 104;
   const LEFT_X = 388, RIGHT_X = 555;
   // テーブル番号 → [x, y]（元図の座標）
   const TABLES = {
-    1: [RIGHT_X, 1114], 2: [RIGHT_X, 1010], 3: [RIGHT_X, 874], 4: [RIGHT_X, 770],
-    5: [RIGHT_X, 634],  6: [RIGHT_X, 530],  7: [RIGHT_X, 393],
-    8: [LEFT_X, 1114],  9: [LEFT_X, 1010],  10: [LEFT_X, 874], 11: [LEFT_X, 770],
-    12: [LEFT_X, 634],  13: [LEFT_X, 530],  14: [LEFT_X, 393],
+    1: [RIGHT_X, 1010], 2: [RIGHT_X, 874], 3: [RIGHT_X, 770], 4: [RIGHT_X, 634],
+    5: [LEFT_X, 1010],  6: [LEFT_X, 874],  7: [LEFT_X, 770],  8: [LEFT_X, 634],
   };
-  const MIN_SLIPS = 0, MAX_SLIPS = 9, DEFAULT_SLIPS = 5;
+  // テーブルごとの席数（レイアウト図の○の数）＝ くじ紙の初期枚数
+  const SEATS = { 1: 4, 2: 4, 3: 5, 4: 4, 5: 4, 6: 5, 7: 4, 8: 4 };
+  const MIN_SLIPS = 0, MAX_SLIPS = 9;
 
   // ===== 保存（localStorage） =====
-  const KEY = "seat-lottery-v1";
+  // 前半（seat-lottery-v1）の状態が残っている端末でも、まっさらな状態から始まるよう別キーにする
+  const KEY = "seat-lottery-v2";
   let storageOK = true;
 
   function defaultState() {
     const counts = {};
-    NOS.forEach(n => counts[n] = DEFAULT_SLIPS);
-    return { v: 1, counts, history: [] };
+    NOS.forEach(n => counts[n] = SEATS[n]);
+    return { v: 2, counts, history: [] };
   }
   function isValidState(s) {
     return s && typeof s === "object" && s.counts && Array.isArray(s.history)
@@ -548,9 +552,9 @@
     tablesLayer.querySelectorAll(".table").forEach(g => g.classList.remove("sel"));
     buttonsEl.querySelectorAll("button").forEach(b => b.classList.remove("on"));
 
-    let delay = 50, elapsed = 0, i = randomInt(14);
+    let delay = 50, elapsed = 0, i = randomInt(NOS.length);
     const step = () => {
-      i = i % 14 + 1;
+      i = i % NOS.length + 1;
       guide.className = "guide rolling";
       guide.innerHTML = `<span class="no">${CIRCLED[i]}</span>`;
       elapsed += delay;
@@ -659,7 +663,7 @@
   // ===== 操作 =====
   $("bulkRow").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
     if (locked()) return;
-    NOS.forEach(n => state.counts[n] = +b.dataset.bulk);
+    NOS.forEach(n => state.counts[n] = b.dataset.bulk === "seats" ? SEATS[n] : +b.dataset.bulk);
     save();
     renderAll();
   }));

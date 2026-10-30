@@ -51,6 +51,7 @@ main{flex:1 1 0;min-width:0;height:100vh;display:flex;align-items:center;justify
 .table rect{fill:var(--table);stroke:var(--table-stroke);stroke-width:4;transition:opacity .5s}
 .table circle{fill:none;stroke:var(--table-text);stroke-width:3}
 .table text{fill:var(--table-text);font-size:30px;font-weight:900;text-anchor:middle;dominant-baseline:central}
+.spare{fill:none;stroke:var(--table-stroke);stroke-width:4;opacity:.4}
 .table,.seat{transition:opacity .5s}
 .seat .base{fill:var(--seat);stroke:var(--seat-stroke);stroke-width:4;transition:fill .45s,stroke .45s}
 .seat.flash .base{fill:var(--flash);stroke:var(--flash-stroke);transition:none;filter:drop-shadow(0 0 10px var(--flash))}
@@ -264,15 +265,17 @@ body.summary #summary{display:flex}
 <canvas id="confetti"></canvas>
 
 <script>
-/* ===== 座席表データ（元図の座標系：横 0-628 / 縦 0-1530、スクリーンが上） ===== */
+/* ===== 座席表データ（元図の座標系：横 0-628 / 縦 0-1180、スクリーンが上） ===== */
 const COLX = {A:113, B:275, C:355, D:517};
 const ROWS = [
   [237,'ABCD'],[337,'ABCD'],
-  [437,'ABCD'],[538,'ABCD'],[588,'ABCD'],[638,'C'],[688,'ABCD'],
-  [790,'ABCD'],[840,'A'],[890,'ABCD'],[940,'ABCD'],[990,'C'],[1040,'ABCD'],
-  [1140,'ABCD'],[1240,'ABCD'],[1290,'ABCD'],[1390,'ABCD'],
+  [437,'ABCD'],[487,'D'],[538,'ABCD'],[588,'ABCD'],[638,'B'],[688,'ABCD'],
+  [790,'ABCD'],[890,'ABCD'],
 ];
-const BLOCKS = [[212,362,14,7],[412,565,13,6],[565,717,12,5],[765,917,11,4],[917,1068,10,3],[1117,1268,9,2],[1268,1420,8,1]];
+const BLOCKS = [[212,362,8,4],[412,565,7,3],[565,717,6,2],[765,917,5,1]];
+// 番号なし（席なし）のテーブル
+const SPARE_BLOCK = [917,1068];
+const BOTTOM = 1120;
 const TABLES = [];
 BLOCKS.forEach(([y1,y2,l,r])=>{
   TABLES.push({no:l, x1:152, x2:233, y1, y2});
@@ -286,10 +289,11 @@ ROWS.forEach(([y,cols])=>{
     SEATS.push({id:c+y, x:COLX[c], y, table: left ? blk[2] : blk[3]});
   }
 });
-const LEFT_WALL = [[62,362],[412,717],[765,917],[1017,1068],[1117,1470]];
+const LEFT_WALL = [[62,BOTTOM]];
 
 /* ===== 状態 ===== */
-const KEY = 'seatLottery.v1';
+// 後半レイアウト用。前半（seatLottery.v1）の席IDは使えないので、設定（opts）だけ引き継ぐ
+const KEY = 'seatLottery.v2', OLD_KEY = 'seatLottery.v1';
 const state = {
   excluded: new Set(),
   winners: [],              // {id, table, prize, name, ts}
@@ -298,6 +302,8 @@ const state = {
 };
 try{
   const s = JSON.parse(localStorage.getItem(KEY) || 'null');
+  const old = s ? null : JSON.parse(localStorage.getItem(OLD_KEY) || 'null');
+  if(old && old.opts) Object.assign(state.opts, old.opts, {orient:'v', layout2:true});
   if(s){
     state.excluded = new Set(s.excluded || []);
     state.winners = s.winners || [];
@@ -342,7 +348,7 @@ function line(x1,y1,x2,y2,parent){
 function render(){
   svg.innerHTML = '';
   const h = state.opts.orient==='h';
-  svg.setAttribute('viewBox', h ? '58 66 1420 496' : '66 58 496 1420');
+  svg.setAttribute('viewBox', h ? '58 66 1070 496' : '66 58 496 1070');
   document.body.classList.toggle('orient-h', h);
   document.body.classList.toggle('orient-v', !h);
   svg.setAttribute('preserveAspectRatio','xMidYMid meet');
@@ -359,9 +365,13 @@ function render(){
   }
   // 壁
   const wg = el('g',{},svg);
-  line(556,62,556,1470,wg);
-  line(72,1470,556,1470,wg);
+  line(556,62,556,BOTTOM,wg);
+  line(72,BOTTOM,556,BOTTOM,wg);
   LEFT_WALL.forEach(([a,b])=>line(72,a,72,b,wg));
+
+  // 番号なしテーブル
+  el('rect', R(152,SPARE_BLOCK[0],233,SPARE_BLOCK[1]), svg).setAttribute('class','spare');
+  el('rect', R(395,SPARE_BLOCK[0],475,SPARE_BLOCK[1]), svg).setAttribute('class','spare');
 
   // テーブル
   TABLES.forEach(t=>{
