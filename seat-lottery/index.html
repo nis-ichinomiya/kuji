@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- ホーム画面に追加して開いたとき、ブラウザのバーを消して全画面で表示する（iPhone / Android） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="景品抽選">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>サプライズ景品 座席抽選</title>
 <style>
 /* ライトモード（既定） */
@@ -690,9 +696,9 @@ function flash(s){
   if(flashing) flashing.el.classList.remove('flash');
   s.el.classList.add('flash'); flashing = s;
 }
-function toast(msg){
+function toast(msg, ms=2600){
   const t=$('toast'); t.textContent=msg; t.classList.add('show');
-  clearTimeout(toast.tm); toast.tm=setTimeout(()=>t.classList.remove('show'),2600);
+  clearTimeout(toast.tm); toast.tm=setTimeout(()=>t.classList.remove('show'),ms);
 }
 function setPhase(p){
   phase = p;
@@ -854,9 +860,39 @@ function toggleFS(){
     if(p && isMobile()) p.then(()=>screen.orientation?.lock?.('landscape')).catch(()=>{});
   }else document.exitFullscreen?.();
 }
-$('fsBtn').onclick = toggleFS;
-// iPhone の Safari などページの全画面表示に対応していない場合はボタンを隠す
-if(!document.documentElement.requestFullscreen) $('fsBtn').style.display = 'none';
+// ホーム画面から開いているか（このときはすでにブラウザのバーがない全画面表示）
+const STANDALONE = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches
+  || matchMedia('(display-mode: fullscreen)').matches;
+if(document.documentElement.requestFullscreen){
+  $('fsBtn').onclick = toggleFS;
+}else if(STANDALONE){
+  // iPhone でホーム画面から開いている：すでに全画面なのでボタン不要
+  $('fsBtn').style.display = 'none';
+}else{
+  // iPhone の Safari：ページの全画面表示に非対応なので、ホーム画面に追加する方法を案内する
+  $('fsBtn').onclick = ()=>alert(
+    'iPhone ではこのボタンで全画面にできません。\n\n'
+    + '【全画面で使う方法】\n'
+    + '1. 画面下（または上）の共有ボタン（□↑）をタップ\n'
+    + '2.「ホーム画面に追加」を選ぶ\n'
+    + '3. ホーム画面にできた「景品抽選」アイコンから開く\n\n'
+    + '※ ホーム画面から開いた場合、座席の対象外設定や景品名は Safari とは別に保存されます。'
+    + 'ホーム画面から開いた状態で設定してください。');
+}
+
+/* ===== 画面を消さない（Wake Lock：対応ブラウザのみ） ===== */
+let wakeLock = null;
+async function keepAwake(){
+  if(!('wakeLock' in navigator) || wakeLock || document.visibilityState!=='visible') return;
+  try{
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', ()=>{ wakeLock = null; });
+  }catch(e){}
+}
+keepAwake();
+// ブラウザによっては操作後でないと取得できないので、タップ時にも取り直す。アプリ切り替えで解除されたら戻ったとき取り直す
+document.addEventListener('pointerdown', keepAwake);
+document.addEventListener('visibilitychange', keepAwake);
 $('uiBtn').onclick = toggleUI;
 $('rotPcBtn').onclick = toggleUI;
 $('uiFab').onclick = toggleUI;
