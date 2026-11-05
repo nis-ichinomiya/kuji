@@ -66,6 +66,12 @@
   /* ---- 座席表 ---- */
   .map { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; padding: 2px 0 6px; }
   .dir { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .map.flipped .dir { order: 2; margin: 4px 0 0; }
+  .flipbtn {
+    font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+    background: var(--panel); box-shadow: 0 1px 2px rgba(0,0,0,.15); color: var(--ink);
+  }
+  .flipbtn.on { background: var(--ink); color: #fff; }
   .grid {
     flex: 1; min-height: 0; width: 100%; max-width: 460px;
     display: grid;
@@ -74,8 +80,9 @@
     gap: 3px;
   }
   .colhead { text-align: center; font-size: 11px; color: var(--muted); font-weight: 700; }
+  .grid.flipped { grid-template-columns: 1fr 1fr .55fr 1fr 1fr 1fr; }
   .aisle {
-    grid-column: 4; grid-row: 2 / span 15;
+    grid-row: 2 / span 15;
     background: var(--aisle); border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
     writing-mode: vertical-rl; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .4em;
@@ -137,7 +144,7 @@
 <body>
 <div class="app">
   <header>
-    <h1 class="title">新幹線チケット配布 <small id="carLabel">15号車</small></h1>
+    <h1 class="title">新幹線チケット配布 <button class="flipbtn" id="flipBtn">⇅ 上下反転</button></h1>
     <div class="stats">
       <div class="stat rest"><div class="lbl">未配布</div><div class="num" id="nRest">0</div></div>
       <div class="stat done"><div class="lbl">配布済み</div><div class="num" id="nDone">0</div></div>
@@ -147,8 +154,8 @@
     <div class="banner">⚙ 対象外設定中 ― 座席をタップで 対象外 ⇔ 対象</div>
   </header>
 
-  <main class="map">
-    <div class="dir">↑ 15号車</div>
+  <main class="map" id="map">
+    <div class="dir" id="dir">↑ 15号車</div>
     <div class="grid" id="grid"></div>
   </main>
 
@@ -183,13 +190,18 @@
   const grid = document.getElementById("grid");
   const seats = {};
 
+  const FLIP_KEY = "shinkansen-ticket-flip";
+  let flipped = false;
+  try { flipped = localStorage.getItem(FLIP_KEY) === "1"; } catch (e) {}
+  const cells = []; // {el, r(0=見出し), i}
+
   // 列見出し
   COLS.forEach((c, i) => {
     const h = document.createElement("div");
     h.className = "colhead";
-    h.style.gridColumn = i + 1; h.style.gridRow = 1;
     h.textContent = c || "";
     grid.appendChild(h);
+    cells.push({ el: h, r: 0, i });
   });
   const aisle = document.createElement("div");
   aisle.className = "aisle"; aisle.textContent = "通路";
@@ -202,12 +214,32 @@
       const b = document.createElement("button");
       b.className = "seat";
       b.textContent = id;
-      b.style.gridColumn = i + 1; b.style.gridRow = r + 1;
       b.addEventListener("click", () => tap(id));
       seats[id] = b;
       grid.appendChild(b);
+      cells.push({ el: b, r, i });
     });
   }
+
+  // 配置（反転時は180度回転：行も列も逆順、文字は正立のまま）
+  function layout() {
+    const n = COLS.length;
+    cells.forEach(({ el, r, i }) => {
+      el.style.gridColumn = flipped ? n - i : i + 1;
+      el.style.gridRow = r === 0 ? 1 : (flipped ? ROWS - r + 2 : r + 1);
+    });
+    aisle.style.gridColumn = flipped ? n - 3 : 4;
+    grid.classList.toggle("flipped", flipped);
+    document.getElementById("map").classList.toggle("flipped", flipped);
+    document.getElementById("dir").textContent = (flipped ? "↓" : "↑") + " 15号車";
+    document.getElementById("flipBtn").classList.toggle("on", flipped);
+  }
+  document.getElementById("flipBtn").addEventListener("click", () => {
+    flipped = !flipped;
+    try { localStorage.setItem(FLIP_KEY, flipped ? "1" : "0"); } catch (e) {}
+    layout();
+  });
+  layout();
 
   function tap(id) {
     const s = get(id);
