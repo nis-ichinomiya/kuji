@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#f4f1ea">
+<meta name="robots" content="noindex, nofollow">
+<title>新幹線チケット配布</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --panel: #ffffff;
+    --ink: #1f2a44;
+    --muted: #7a8194;
+    --line: #1f2a44;
+    --aisle: #d9d6cf;
+    --todo: #ffffff;
+    --done: #2a9d5c;
+    --done-ink: #ffffff;
+    --off: #cfcbc3;
+    --off-ink: #8b8678;
+    --ex-bg: #3b2f12;
+    --ex-accent: #ffb703;
+    --ex-ink: #fff6dc;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    transition: background-color .25s;
+  }
+  button { font: inherit; color: inherit; border: none; background: none; padding: 0; cursor: pointer; }
+
+  .app {
+    display: flex; flex-direction: column;
+    height: 100vh; height: 100dvh;
+    padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 8px);
+  }
+
+  /* ---- ヘッダー（集計） ---- */
+  header { padding: 8px 2px 6px; }
+  .title { font-size: 15px; font-weight: 700; margin: 0 0 6px; display: flex; justify-content: space-between; align-items: baseline; }
+  .title small { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat { background: var(--panel); border-radius: 10px; padding: 5px 8px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .stat .lbl { font-size: 11px; color: var(--muted); }
+  .stat .num { font-size: 20px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat.rest .num { color: #d62828; }
+  .stat.done .num { color: var(--done); }
+  .progress { height: 5px; background: rgba(0,0,0,.08); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .progress > i { display: block; height: 100%; width: 0; background: var(--done); transition: width .2s; }
+
+  /* ---- 対象外設定中バナー ---- */
+  .banner {
+    display: none;
+    margin-top: 6px; padding: 7px 10px; border-radius: 10px;
+    background: var(--ex-accent); color: #3b2f12; font-weight: 800; font-size: 14px; text-align: center;
+  }
+
+  /* ---- 座席表 ---- */
+  .map { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; padding: 2px 0 6px; }
+  .dir { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .grid {
+    flex: 1; min-height: 0; width: 100%; max-width: 460px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr .55fr 1fr 1fr;
+    grid-template-rows: auto repeat(15, minmax(0, 1fr));
+    gap: 3px;
+  }
+  .colhead { text-align: center; font-size: 11px; color: var(--muted); font-weight: 700; }
+  .aisle {
+    grid-column: 4; grid-row: 2 / span 15;
+    background: var(--aisle); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    writing-mode: vertical-rl; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .4em;
+  }
+  .seat {
+    position: relative;
+    border: 2px solid var(--line); border-radius: 7px;
+    background: var(--todo); color: var(--ink);
+    font-weight: 800; font-size: clamp(12px, 3.8vw, 17px);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 0; line-height: 1;
+    transition: transform .08s, background-color .12s;
+  }
+  .seat:active { transform: scale(.93); }
+  .seat.done { background: var(--done); border-color: var(--done); color: var(--done-ink); }
+  .seat.done::after { content: "✓"; position: absolute; right: 3px; top: 1px; font-size: 10px; }
+  .seat.off {
+    background: repeating-linear-gradient(-45deg, var(--off) 0 5px, #dedad2 5px 10px);
+    border-color: var(--off); color: var(--off-ink); text-decoration: line-through;
+  }
+
+  /* ---- フッター ---- */
+  footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 4px; }
+  .legend { display: flex; gap: 8px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 3px; vertical-align: -1px; border: 1px solid var(--line); }
+  .legend .l-todo::before { background: var(--todo); }
+  .legend .l-done::before { background: var(--done); border-color: var(--done); }
+  .legend .l-off::before { background: var(--off); border-color: var(--off); }
+  .btn {
+    border-radius: 12px; padding: 11px 14px; font-weight: 800; font-size: 14px;
+    background: var(--panel); box-shadow: 0 1px 3px rgba(0,0,0,.18);
+    white-space: nowrap;
+  }
+  .btn.reset { color: var(--muted); font-size: 12px; padding: 11px 10px; }
+  .btn.ex { background: var(--ink); color: #fff; }
+
+  /* ---- 対象外設定モード ---- */
+  body.exmode { background: var(--ex-bg); color: var(--ex-ink); }
+  body.exmode .banner { display: block; }
+  body.exmode .stat { background: rgba(255,255,255,.1); box-shadow: none; }
+  body.exmode .stat .lbl, body.exmode .colhead, body.exmode .legend { color: #d8c99a; }
+  body.exmode .aisle { background: rgba(255,255,255,.12); color: #d8c99a; }
+  body.exmode .seat { border-color: var(--ex-accent); }
+  body.exmode .seat.done { opacity: .75; }
+  body.exmode .seat.off { border-color: var(--ex-accent); border-style: dashed; color: #5a523f; }
+  body.exmode .btn.ex { background: var(--ex-accent); color: #3b2f12; animation: pulse 1.4s infinite; }
+  body.exmode .btn.reset { visibility: hidden; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(255,183,3,.35); } }
+
+  /* ---- 確認ダイアログ ---- */
+  dialog { border: none; border-radius: 14px; padding: 18px; width: min(320px, 90vw); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog p { margin: 0 0 14px; font-size: 15px; line-height: 1.5; white-space: pre-line; }
+  dialog .row { display: flex; gap: 8px; justify-content: flex-end; }
+  dialog .row button { padding: 9px 14px; border-radius: 10px; font-weight: 700; background: #eee; }
+  dialog .row button.danger { background: #d62828; color: #fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1 class="title">新幹線チケット配布 <small id="carLabel">15号車</small></h1>
+    <div class="stats">
+      <div class="stat rest"><div class="lbl">未配布</div><div class="num" id="nRest">0</div></div>
+      <div class="stat done"><div class="lbl">配布済み</div><div class="num" id="nDone">0</div></div>
+      <div class="stat"><div class="lbl">対象外</div><div class="num" id="nOff">0</div></div>
+    </div>
+    <div class="progress"><i id="bar"></i></div>
+    <div class="banner">⚙ 対象外設定中 ― 座席をタップで 対象外 ⇔ 対象</div>
+  </header>
+
+  <main class="map">
+    <div class="dir">↑ 15号車</div>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <footer>
+    <button class="btn reset" id="resetBtn">リセット</button>
+    <div class="legend"><span class="l-todo">未配布</span><span class="l-done">配布済</span><span class="l-off">対象外</span></div>
+    <button class="btn ex" id="exBtn">対象外設定</button>
+  </footer>
+</div>
+
+<dialog id="dlg">
+  <p id="dlgMsg"></p>
+  <div class="row">
+    <button value="cancel" id="dlgCancel">キャンセル</button>
+    <button class="danger" id="dlgOk">OK</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  const ROWS = 15;
+  const COLS = ["A", "B", "C", null, "D", "E"]; // null = 通路
+  const KEY = "shinkansen-ticket-v1";
+  // status: "todo" | "done" | "off"
+
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { state = {}; }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+  const get = id => state[id] || "todo";
+
+  let exMode = false;
+  const grid = document.getElementById("grid");
+  const seats = {};
+
+  // 列見出し
+  COLS.forEach((c, i) => {
+    const h = document.createElement("div");
+    h.className = "colhead";
+    h.style.gridColumn = i + 1; h.style.gridRow = 1;
+    h.textContent = c || "";
+    grid.appendChild(h);
+  });
+  const aisle = document.createElement("div");
+  aisle.className = "aisle"; aisle.textContent = "通路";
+  grid.appendChild(aisle);
+
+  for (let r = 1; r <= ROWS; r++) {
+    COLS.forEach((c, i) => {
+      if (!c) return;
+      const id = r + c;
+      const b = document.createElement("button");
+      b.className = "seat";
+      b.textContent = id;
+      b.style.gridColumn = i + 1; b.style.gridRow = r + 1;
+      b.addEventListener("click", () => tap(id));
+      seats[id] = b;
+      grid.appendChild(b);
+    });
+  }
+
+  function tap(id) {
+    const s = get(id);
+    let next;
+    if (exMode) {
+      next = s === "off" ? "todo" : "off";
+    } else {
+      if (s === "off") { buzz(30); return; } // 対象外は通常モードでは変更しない
+      next = s === "done" ? "todo" : "done";
+    }
+    if (next === "todo") delete state[id]; else state[id] = next;
+    save();
+    buzz(next === "done" ? 15 : 8);
+    render();
+  }
+
+  function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+  function render() {
+    let done = 0, off = 0, total = 0;
+    for (const id in seats) {
+      const s = get(id);
+      total++;
+      if (s === "done") done++;
+      if (s === "off") off++;
+      seats[id].className = "seat" + (s === "todo" ? "" : " " + s);
+      seats[id].setAttribute("aria-label", id + " " + ({ todo: "未配布", done: "配布済み", off: "対象外" })[s]);
+    }
+    const target = total - off;
+    document.getElementById("nRest").textContent = target - done;
+    document.getElementById("nDone").textContent = done;
+    document.getElementById("nOff").textContent = off;
+    document.getElementById("bar").style.width = target ? (done / target * 100) + "%" : "0";
+  }
+
+  const exBtn = document.getElementById("exBtn");
+  exBtn.addEventListener("click", () => {
+    exMode = !exMode;
+    document.body.classList.toggle("exmode", exMode);
+    exBtn.textContent = exMode ? "設定完了" : "対象外設定";
+    document.querySelector('meta[name="theme-color"]').content = exMode ? "#3b2f12" : "#f4f1ea";
+  });
+
+  // リセット
+  const dlg = document.getElementById("dlg");
+  function confirmDlg(msg) {
+    return new Promise(res => {
+      document.getElementById("dlgMsg").textContent = msg;
+      if (typeof dlg.showModal !== "function") { res(window.confirm(msg)); return; }
+      const done = v => { dlg.close(); okB.onclick = caB.onclick = null; res(v); };
+      const okB = document.getElementById("dlgOk"), caB = document.getElementById("dlgCancel");
+      okB.onclick = () => done(true); caB.onclick = () => done(false);
+      dlg.showModal();
+    });
+  }
+  document.getElementById("resetBtn").addEventListener("click", async () => {
+    if (!(await confirmDlg("配布状況をリセットしますか？\n（対象外の設定は残ります）"))) return;
+    for (const id in state) if (state[id] === "done") delete state[id];
+    save(); render();
+  });
+  // 長押しで全リセット（対象外も含む）
+  let lp;
+  const resetBtn = document.getElementById("resetBtn");
+  resetBtn.addEventListener("touchstart", () => {
+    lp = setTimeout(async () => {
+      lp = "fired";
+      if (!(await confirmDlg("対象外の設定も含めて、すべて初期状態に戻しますか？"))) return;
+      state = {}; save(); render();
+    }, 900);
+  }, { passive: true });
+  resetBtn.addEventListener("touchend", e => { if (lp === "fired") e.preventDefault(); clearTimeout(lp); lp = null; });
+  resetBtn.addEventListener("touchmove", () => { clearTimeout(lp); lp = null; }, { passive: true });
+
+  render();
+})();
+</script>
+</body>
+</html>
